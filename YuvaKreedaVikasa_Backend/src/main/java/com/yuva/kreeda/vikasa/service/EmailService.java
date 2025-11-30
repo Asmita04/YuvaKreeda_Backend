@@ -22,4 +22,18 @@ public class EmailService {
     mailSender.send(message);
     System.out.println("Email sent to " + to);
   }
+  
+  // Send OTP email
+  @Async
+  public void sendOtpEmail(String to, String otp) {
+      String subject = "Your OTP Verification Code";
+      String body = 
+              "Dear User,\n\n" +
+              "Your OTP for email verification is: " + otp + "\n" +
+              "This OTP is valid for 10 minutes.\n\n" +
+              "Regards,\nYuva Kreeda Vikasa Team";
+
+      sendEmail(to, subject, body);
+  }
+
 }

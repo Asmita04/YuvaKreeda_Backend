@@ -2,6 +2,8 @@ package com.yuva.kreeda.vikasa.service;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -15,12 +17,18 @@ import com.yuva.kreeda.vikasa.entities.User;
 import com.yuva.kreeda.vikasa.repository.SportRepository;
 import com.yuva.kreeda.vikasa.repository.UserRepository;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
 @Transactional
+//@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
   @Autowired
   private UserRepository userRepository;
+  
+  @Autowired
+  private OtpService otpService;
 
   @Autowired
   private EmailService emailService;
@@ -33,45 +41,51 @@ public class UserServiceImpl implements UserService {
     return userRepository.findAll();
   }
 
+  //Register user 
   @Override
-  public String addUser(UserDTO userDto) { // Changed parameter type to UserDTO
-    // 1. Create User entity from DTO
-    User user = new User();
-    user.setName(userDto.getName());
-    user.setEmail(userDto.getEmail());
-    user.setPassword(userDto.getPassword());
-    user.setRole(userDto.getRole());
+  public String addUser(UserDTO userDto) {
 
-    // 2. Fetch Sports entities using sportNames
-    if (userDto.getSportNames() != null && !userDto.getSportNames().isEmpty()) {
-      java.util.List<Sports> existingSports = sportRepo.findBySportNameIn(userDto.getSportNames());
-      java.util.Set<Sports> finalSports = new HashSet<>(existingSports);
-
-      // Extract names of existing sports
-      java.util.Set<String> existingSportNames = new HashSet<>();
-      for (Sports s : existingSports) {
-        existingSportNames.add(s.getSportName());
+      // 1. Check email verification FIRST
+      if (!otpService.isEmailVerified(userDto.getEmail())) {
+          return "Email not verified. Please verify OTP before registering.";
       }
+      // 2. Create User entity
+      User user = new User();
+      user.setName(userDto.getName());
+      user.setEmail(userDto.getEmail());
+      user.setPassword(userDto.getPassword());
+      user.setRole(userDto.getRole());
+      // 3. Fetch or create sports
+      if (userDto.getSportNames() != null && !userDto.getSportNames().isEmpty()) {
 
-      // Find missing sports and create them
-      for (String sportName : userDto.getSportNames()) {
-        if (!existingSportNames.contains(sportName)) {
-          Sports newSport = new Sports(sportName, "Will be generated during user registration");
-          finalSports.add(sportRepo.save(newSport));
-        }
+          List<Sports> existingSports = sportRepo.findBySportNameIn(userDto.getSportNames());
+          Set<Sports> finalSports = new HashSet<>(existingSports);
+
+          Set<String> existingSportNames = existingSports.stream()
+                  .map(Sports::getSportName)
+                  .collect(Collectors.toSet());
+
+          for (String sportName : userDto.getSportNames()) {
+              if (!existingSportNames.contains(sportName)) {
+                  Sports newSport = new Sports(sportName, "Auto-created during sign-up");
+                  finalSports.add(sportRepo.save(newSport));
+              }
+          }
+          user.setSports(finalSports);
       }
-      user.setSports(finalSports);
-    }
+      // 4. Save user AFTER OTP verification
+      userRepository.save(user);
 
-    // 3. Save user
-    userRepository.save(user);
+      // 5. Remove email from verified list
+      otpService.clearVerifiedEmail(user.getEmail());
 
-    // 4. Send Welcome Email (Async) without slowing the process
-    emailService.sendEmail(user.getEmail(), "Welcome to YuvaKreedaVikasa!",
-        "Hi " + user.getName() + ",\n\nThanks for registering on our platform.\n\nRegards,\nTeam YuvaKreedaVikasa");
+      // 6. Send welcome email
+      emailService.sendEmail(user.getEmail(), "Welcome to YuvaKreedaVikasa!",
+              "Hi " + user.getName() + ",\n\nThanks for registering.\n\nTeam YKV");
 
-    return "User added successfully with sports!";
+      return "User registered successfully!";
   }
+
 
   @Override
   public User getDetailsById(Long id) {

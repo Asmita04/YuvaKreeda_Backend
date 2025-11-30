@@ -1,8 +1,13 @@
 package com.yuva.kreeda.vikasa.controller;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,20 +18,29 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.yuva.kreeda.vikasa.dto.OtpVerifyDTO;
+import com.yuva.kreeda.vikasa.dto.UserDTO;
 import com.yuva.kreeda.vikasa.entities.Role;
 import com.yuva.kreeda.vikasa.entities.User;
+import com.yuva.kreeda.vikasa.service.EmailService;
+import com.yuva.kreeda.vikasa.service.OtpService;
 import com.yuva.kreeda.vikasa.service.UserService;
 
 @RestController // @Controller - cls level annotation + @ResponseBody - req handling
                 // method(@GetMapping | @PostMapping| .......) ret type
 @RequestMapping("/users") // optional BUT recommended to specify base url pattern
-@CrossOrigin(origins = "http://localhost:3000") // required only for Browser running app - public facing apps
+@CrossOrigin(origins = "http://localhost:5173") // required only for Browser running app - public facing apps
 public class UserController {
 
   // depcy
   @Autowired
   private UserService userService;
-
+  
+  @Autowired
+  private EmailService emailService;
+  
+  @Autowired
+  private OtpService otpService;
   /*
    * Desc - Get all users (List)
    * URL - http://host:port/users
@@ -48,11 +62,41 @@ public class UserController {
    * I/P - payload - json -> Java object (de-serial | un marshal ) : User entity
    * Resp - Message (success | failure)
    */
-  @PostMapping
-  public String addNewUser(@RequestBody com.yuva.kreeda.vikasa.dto.UserDTO userDto) {
-    System.out.println("in add " + userDto);
-    // invoke service layer method
-    return userService.addUser(userDto);
+  @PostMapping("/register")
+  public ResponseEntity<?> registerUser(@RequestBody UserDTO dto) {
+
+      String result = userService.addUser(dto);
+
+      if (result.contains("not verified")) {
+          return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+      }
+
+      return ResponseEntity.status(HttpStatus.CREATED).body(result);
+  }
+
+  
+  @PostMapping("/otp/send")
+  public ResponseEntity<?> sendOtp(@RequestBody Map<String, String> req) {
+	  System.out.println("in user controller of sendOTP!");
+      String email = req.get("email");
+      String otp = otpService.generateOtp(email); // store OTP in DB or cache
+      emailService.sendOtpEmail(email, otp);
+
+      return ResponseEntity.ok(Map.of("message", "OTP sent successfully"));
+  }
+
+  @PostMapping("/otp/verify")
+  public ResponseEntity<?> verifyOtp(@RequestBody OtpVerifyDTO req) {
+      String email = req.getEmail();
+      String otp = req.getOtp();
+      if (email == null || otp == null) {
+          return ResponseEntity.badRequest().body(Map.of("message", "Email and OTP required"));
+      }
+      boolean valid = otpService.validateOtp(email, otp);
+      if (!valid) {
+          return ResponseEntity.status(400).body(Map.of("message", "Invalid or expired OTP"));
+      }
+      return ResponseEntity.ok(Map.of("message", "OTP verified"));
   }
 
   /*
