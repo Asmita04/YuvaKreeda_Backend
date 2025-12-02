@@ -9,4 +9,5 @@ import com.yuva.kreeda.vikasa.entities.User;
 
 public interface UserRepository extends JpaRepository<User, Long> {
   List<User> findByRole(Role role);
+  java.util.Optional<User> findByEmail(String email);
 }

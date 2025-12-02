@@ -8,7 +8,8 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.yuva.kreeda.vikasa.YuvaKreedaVikasaApplication;
+import com.yuva.kreeda.vikasa.controller.SportController;
 import com.yuva.kreeda.vikasa.custom_exceptions.ResourceNotFoundException;
 import com.yuva.kreeda.vikasa.dto.UserDTO;
 import com.yuva.kreeda.vikasa.entities.Role;
@@ -24,6 +25,10 @@ import lombok.RequiredArgsConstructor;
 //@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
+    private final YuvaKreedaVikasaApplication yuvaKreedaVikasaApplication;
+
+    private final SportController sportController;
+
   @Autowired
   private UserRepository userRepository;
   
@@ -36,6 +41,11 @@ public class UserServiceImpl implements UserService {
   @Autowired // Added SportRepository injection
   private SportRepository sportRepo;
 
+    UserServiceImpl(SportController sportController, YuvaKreedaVikasaApplication yuvaKreedaVikasaApplication) {
+        this.sportController = sportController;
+        this.yuvaKreedaVikasaApplication = yuvaKreedaVikasaApplication;
+    }
+
   @Override
   public List<User> getAllUsers() {
     return userRepository.findAll();
@@ -44,11 +54,12 @@ public class UserServiceImpl implements UserService {
   //Register user 
   @Override
   public String addUser(UserDTO userDto) {
-
+	  System.out.println("In service of add user:");
       // 1. Check email verification FIRST
       if (!otpService.isEmailVerified(userDto.getEmail())) {
           return "Email not verified. Please verify OTP before registering.";
       }
+      System.out.println("Creating User entity:");
       // 2. Create User entity
       User user = new User();
       user.setName(userDto.getName());
@@ -73,6 +84,7 @@ public class UserServiceImpl implements UserService {
           }
           user.setSports(finalSports);
       }
+      System.out.println("saving user after verification");
       // 4. Save user AFTER OTP verification
       userRepository.save(user);
 

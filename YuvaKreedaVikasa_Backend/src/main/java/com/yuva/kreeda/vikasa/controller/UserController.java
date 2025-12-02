@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
+import com.yuva.kreeda.vikasa.YuvaKreedaVikasaApplication;
 import com.yuva.kreeda.vikasa.dto.OtpVerifyDTO;
 import com.yuva.kreeda.vikasa.dto.UserDTO;
 import com.yuva.kreeda.vikasa.entities.Role;
@@ -32,15 +32,76 @@ import com.yuva.kreeda.vikasa.service.UserService;
 @CrossOrigin(origins = "http://localhost:5173") // required only for Browser running app - public facing apps
 public class UserController {
 
+    private final YuvaKreedaVikasaApplication yuvaKreedaVikasaApplication;
+
   // depcy
   @Autowired
   private UserService userService;
   
   @Autowired
+  private org.springframework.security.authentication.AuthenticationManager authenticationManager;
+
+  @Autowired
+  private com.yuva.kreeda.vikasa.security.JwtUtils jwtUtils;
+  @Autowired
   private EmailService emailService;
   
   @Autowired
   private OtpService otpService;
+
+    UserController(YuvaKreedaVikasaApplication yuvaKreedaVikasaApplication) {
+        this.yuvaKreedaVikasaApplication = yuvaKreedaVikasaApplication;
+    }
+    //com.yuva.kreeda.vikasa.dto.LoginDTO
+    @PostMapping("/login")
+    public org.springframework.http.ResponseEntity<?> loginUser(
+        @RequestBody com.yuva.kreeda.vikasa.dto.LoginDTO loginDto) {
+      System.out.println("in login " + loginDto);
+      try {
+        // 1. Create auth token
+        org.springframework.security.authentication.UsernamePasswordAuthenticationToken authToken = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+            loginDto.getEmail(), loginDto.getPassword());
+
+        // 2. Authenticate
+        org.springframework.security.core.Authentication authentication = authenticationManager.authenticate(authToken);
+
+        // 3. Generate JWT
+        // Get User entity from CustomUserDetails
+        com.yuva.kreeda.vikasa.security.CustomUserDetails userDetails = (com.yuva.kreeda.vikasa.security.CustomUserDetails) authentication
+            .getPrincipal();
+        User user = userDetails.getUser();
+
+        String token = jwtUtils.generateToken(user);
+
+        // 4. Return response with token and user details
+        // We can wrap this in a LoginResponseDTO if we want, or just return a
+        // Map/UserRespDTO with token
+        // For now, let's add token to UserRespDTO or return a Map.
+        // Let's return a Map for flexibility or modify UserRespDTO.
+        // Let's modify UserRespDTO to include token or just return a Map.
+        // To keep it simple and consistent with frontend expectation (which might
+        // expect user details),
+        // let's return a Map containing token and user details.
+
+        List<String> sportNames = user.getSports().stream()
+            .map(s -> s.getSportName())
+            .collect(java.util.stream.Collectors.toList());
+
+        com.yuva.kreeda.vikasa.dto.UserRespDTO userResp = new com.yuva.kreeda.vikasa.dto.UserRespDTO(
+            user.getId(), user.getName(), user.getEmail(), user.getRole(), sportNames);
+
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("token", token);
+        response.put("user", userResp);
+
+        return org.springframework.http.ResponseEntity.ok(response);
+
+      } catch (Exception e) {
+        return org.springframework.http.ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+            .body("Invalid email or password");
+      }
+    }
+
   /*
    * Desc - Get all users (List)
    * URL - http://host:port/users
@@ -89,6 +150,7 @@ public class UserController {
   public ResponseEntity<?> verifyOtp(@RequestBody OtpVerifyDTO req) {
       String email = req.getEmail();
       String otp = req.getOtp();
+      System.out.println("verifying otp request got : " + email + " " + otp );
       if (email == null || otp == null) {
           return ResponseEntity.badRequest().body(Map.of("message", "Email and OTP required"));
       }
