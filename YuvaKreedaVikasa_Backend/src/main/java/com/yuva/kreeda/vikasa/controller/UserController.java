@@ -125,7 +125,7 @@ public class UserController {
    */
   @PostMapping("/register")
   public ResponseEntity<?> registerUser(@RequestBody UserDTO dto) {
-
+	  System.out.println("in register : " + dto.getEmail() );
       String result = userService.addUser(dto);
 
       if (result.contains("not verified")) {
